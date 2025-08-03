@@ -505,9 +505,9 @@ autoplayToggle.addEventListener("change", (e) => {
   window.localStorage.setItem("autoplayEnabled", appState.autoplayEnabled);
 });
 
-// Keyboard shortcuts for navigation
+// Keyboard shortcuts for navigation and video controls
 document.addEventListener("keydown", (e) => {
-  // Only handle when player is active and we're not in an input field
+  // Only handle when we're not in an input field
   if (
     document.activeElement.tagName === "INPUT" ||
     document.activeElement.tagName === "TEXTAREA" ||
@@ -516,20 +516,101 @@ document.addEventListener("keydown", (e) => {
     return;
   }
 
-  // Left arrow (with Alt key) for previous video
+  // Check if video player is active
+  const playerActive = appState.player && !appState.player.paused();
+  const playerExists = appState.player !== null;
+
+  // Video navigation shortcuts (Alt + Arrow keys)
   if (e.key === "ArrowLeft" && e.altKey) {
     if (!prevVideoBtn.disabled) {
       loadPreviousVideo();
       e.preventDefault();
     }
+    return;
   }
 
-  // Right arrow (with Alt key) for next video
   if (e.key === "ArrowRight" && e.altKey) {
     if (!nextVideoBtn.disabled) {
       loadNextVideo();
       e.preventDefault();
     }
+    return;
+  }
+
+  // Video player controls (only when player exists)
+  if (!playerExists) return;
+
+  switch (e.key) {
+    case " ": // Spacebar - Play/Pause
+      if (appState.player.paused()) {
+        appState.player.play();
+      } else {
+        appState.player.pause();
+      }
+      e.preventDefault();
+      break;
+
+    case "ArrowLeft": // Left arrow - Seek backward 10 seconds
+      if (!e.altKey) {
+        const currentTime = appState.player.currentTime();
+        appState.player.currentTime(Math.max(0, currentTime - 10));
+        e.preventDefault();
+      }
+      break;
+
+    case "ArrowRight": // Right arrow - Seek forward 10 seconds
+      if (!e.altKey) {
+        const currentTime = appState.player.currentTime();
+        const duration = appState.player.duration();
+        appState.player.currentTime(Math.min(duration, currentTime + 10));
+        e.preventDefault();
+      }
+      break;
+
+    case "ArrowUp": // Up arrow - Increase volume
+      const currentVolume = appState.player.volume();
+      appState.player.volume(Math.min(1, currentVolume + 0.1));
+      e.preventDefault();
+      break;
+
+    case "ArrowDown": // Down arrow - Decrease volume
+      const volume = appState.player.volume();
+      appState.player.volume(Math.max(0, volume - 0.1));
+      e.preventDefault();
+      break;
+
+    case "m":
+    case "M": // M key - Mute/Unmute
+      appState.player.muted(!appState.player.muted());
+      e.preventDefault();
+      break;
+
+    case ">":
+    case ".": // > or . - Increase playback rate
+      const currentRate = appState.player.playbackRate();
+      const newRate = Math.min(3, currentRate + 0.25);
+      appState.player.playbackRate(newRate);
+      appState.currentPlaybackRate = newRate;
+      window.localStorage.setItem("currentPlaybackRate", newRate);
+      e.preventDefault();
+      break;
+
+    case "<":
+    case ",": // < or , - Decrease playback rate
+      const rate = appState.player.playbackRate();
+      const decreasedRate = Math.max(0.25, rate - 0.25);
+      appState.player.playbackRate(decreasedRate);
+      appState.currentPlaybackRate = decreasedRate;
+      window.localStorage.setItem("currentPlaybackRate", decreasedRate);
+      e.preventDefault();
+      break;
+
+    case "0": // 0 - Reset playback rate to 1x
+      appState.player.playbackRate(1);
+      appState.currentPlaybackRate = 1;
+      window.localStorage.setItem("currentPlaybackRate", 1);
+      e.preventDefault();
+      break;
   }
 });
 
