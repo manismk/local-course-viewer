@@ -10,6 +10,7 @@ const appState = {
   currentVideoIndex: -1,
   videoFiles: [],
   autoplayEnabled: false,
+  videoDurations: {}, // Cache for video durations
 };
 
 // DOM Elements
@@ -23,6 +24,108 @@ const sortSelect = document.getElementById("sort-select");
 const prevVideoBtn = document.getElementById("prev-video-btn");
 const nextVideoBtn = document.getElementById("next-video-btn");
 const autoplayToggle = document.getElementById("autoplay-toggle");
+const folderInfo = document.getElementById("folder-info");
+const durationProgressElement = document.getElementById("duration-progress");
+const folderProgressFill = document.getElementById("folder-progress-fill");
+
+// Utility function to format time in MM:SS or HH:MM:SS format
+function formatTime(seconds) {
+  if (isNaN(seconds) || seconds < 0) return "--:--";
+  
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  
+  if (hours > 0) {
+    return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+  return `${minutes}:${secs.toString().padStart(2, '0')}`;
+}
+
+// Function to get video duration without loading the full video
+async function getVideoDuration(fileHandle, filePath) {
+  // Check cache first
+  if (appState.videoDurations[filePath]) {
+    return appState.videoDurations[filePath];
+  }
+
+  try {
+    const file = await fileHandle.getFile();
+    return new Promise((resolve) => {
+      const video = document.createElement('video');
+      const url = URL.createObjectURL(file);
+      
+      video.addEventListener('loadedmetadata', () => {
+        const duration = video.duration;
+        appState.videoDurations[filePath] = duration; // Cache the duration
+        URL.revokeObjectURL(url);
+        resolve(duration);
+      });
+      
+      video.addEventListener('error', () => {
+        URL.revokeObjectURL(url);
+        resolve(0); // Return 0 if duration cannot be determined
+      });
+      
+      video.src = url;
+    });
+  } catch (error) {
+    console.error('Error getting video duration:', error);
+    return 0;
+  }
+}
+
+// Function to calculate and update total folder duration with progress
+async function updateTotalFolderDuration() {
+  if (appState.videoFiles.length === 0) {
+    folderInfo.style.display = "none";
+    return;
+  }
+
+  // Show the folder info section
+  folderInfo.style.display = "block";
+  durationProgressElement.textContent = "Loading...";
+  folderProgressFill.style.width = "0%";
+
+  try {
+    // Get all video durations
+    const durations = await Promise.all(
+      appState.videoFiles.map(async (video) => {
+        const duration = await getVideoDuration(video.handle, video.path);
+        return duration;
+      })
+    );
+
+    const totalSeconds = durations.reduce((sum, duration) => sum + duration, 0);
+    
+    // Calculate completed duration (videos before current + current video progress if any)
+    let completedSeconds = 0;
+    
+    if (appState.currentVideoIndex >= 0) {
+      // Add duration of all videos before current one
+      for (let i = 0; i < appState.currentVideoIndex; i++) {
+        completedSeconds += durations[i] || 0;
+      }
+      
+      // Add progress of current video if available
+      if (appState.currentVideoPath && appState.videoProgress[appState.currentVideoPath]) {
+        completedSeconds += appState.videoProgress[appState.currentVideoPath].currentTime || 0;
+      }
+    }
+
+    // Calculate progress percentage
+    const progressPercentage = totalSeconds > 0 ? (completedSeconds / totalSeconds) * 100 : 0;
+
+    // Update display
+    durationProgressElement.textContent = `${formatTime(completedSeconds)} / ${formatTime(totalSeconds)}`;
+    folderProgressFill.style.width = `${Math.min(100, Math.max(0, progressPercentage))}%`;
+    
+  } catch (error) {
+    console.error("Error calculating total folder duration:", error);
+    durationProgressElement.textContent = "Error";
+    folderProgressFill.style.width = "0%";
+  }
+}
 
 // Initialize VideoJS player
 function initPlayer() {
@@ -65,11 +168,17 @@ function initPlayer() {
         duration,
         percentage: (currentTime / duration) * 100,
       };
+      
+      // Update folder progress every few seconds to show real-time progress
+      const currentSeconds = Math.floor(currentTime);
+      if (currentSeconds % 5 === 0) { // Update every 5 seconds
+        updateTotalFolderDuration();
+      }
     }
   });
 
   // Save playback rate when changed - this is now global, not per video
-  appState.player.on("ratechange", (...args) => {
+  appState.player.on("ratechange", () => {
     appState.currentPlaybackRate = appState.player.playbackRate();
     if (appState.currentPlaybackRate !== 1) {
       window.localStorage.setItem(
@@ -247,7 +356,7 @@ async function displayFolderContents(directoryHandle) {
     item.appendChild(icon);
     item.appendChild(name);
 
-    // Add progress indicator for video files
+    // Add progress indicator and duration for video files
     if (entry.kind === "file" && isVideoFile(entry.name)) {
       // Add to video files array
       appState.videoFiles.push({
@@ -258,6 +367,18 @@ async function displayFolderContents(directoryHandle) {
 
       const fullPath = [...appState.currentPath, entry.name].join("/");
 
+      // Add duration display
+      const durationElement = document.createElement("span");
+      durationElement.className = "video-duration";
+      durationElement.textContent = "--:--";
+      item.appendChild(durationElement);
+
+      // Get and display duration asynchronously
+      getVideoDuration(entry.handle, fullPath).then(duration => {
+        durationElement.textContent = formatTime(duration);
+      });
+
+      // Add progress indicator
       if (appState.videoProgress[fullPath]) {
         const progressWrapper = document.createElement("div");
         progressWrapper.className = "progress-indicator";
@@ -308,6 +429,9 @@ async function displayFolderContents(directoryHandle) {
 
   // Update current video highlighting
   updateCurrentVideoHighlight();
+
+  // Update total folder duration
+  updateTotalFolderDuration();
 }
 
 // Function for natural sorting (1, 2, 10 instead of 1, 10, 2)
@@ -414,6 +538,9 @@ async function loadVideo(fileHandle, fileName) {
 
     // Update current video highlighting in sidebar
     updateCurrentVideoHighlight();
+
+    // Update folder progress
+    updateTotalFolderDuration();
   } catch (error) {
     console.error("Error loading video:", error);
     alert("Error loading video: " + error.message);
@@ -516,8 +643,7 @@ document.addEventListener("keydown", (e) => {
     return;
   }
 
-  // Check if video player is active
-  const playerActive = appState.player && !appState.player.paused();
+  // Check if video player exists
   const playerExists = appState.player !== null;
 
   // Video navigation shortcuts (Alt + Arrow keys)
