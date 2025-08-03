@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Video Course Player</title>
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/video.js/7.20.3/video-js.min.css"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="index.css" />
+  </head>
+  <body>
+    <div class="app-container">
+      <div class="sidebar">
+        <div class="folder-select">
+          <button id="select-folder-btn">Select Course Folder</button>
+        </div>
+        <div class="breadcrumb" id="breadcrumb">
+          <span class="breadcrumb-item" data-path="/">Home</span>
+        </div>
+        <div class="sorting-options">
+          <label for="sort-select">Sort by:</label>
+          <select id="sort-select">
+            <option value="name-asc">Name (A-Z)</option>
+            <option value="name-desc">Name (Z-A)</option>
+            <option value="date-asc">Date (Oldest first)</option>
+            <option value="date-desc">Date (Newest first)</option>
+          </select>
+        </div>
+        <div class="file-browser" id="file-browser"></div>
+      </div>
+      <div class="main-content">
+        <div class="video-container">
+          <div id="video-title" class="video-title">No video selected</div>
+          <div class="video-wrapper">
+            <div id="empty-player-state" class="empty-state">
+              <div class="empty-state-icon">▶️</div>
+              <div class="empty-state-message">
+                Select a video from the sidebar to start watching
+              </div>
+            </div>
+            <video
+              id="video-player"
+              class="video-js vjs-big-play-centered hidden"
+            >
+              <p class="vjs-no-js">
+                To view this video please enable JavaScript, and consider
+                upgrading to a web browser that supports HTML5 video
+              </p>
+            </video>
+          </div>
+          <div class="video-navigation">
+            <button id="prev-video-btn" class="nav-button" disabled>
+              ← Previous Video
+            </button>
+            <button id="next-video-btn" class="nav-button" disabled>
+              Next Video →
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/7.20.3/video.min.js"></script>
+    <script src="index.js"></script>
+  </body>
+</html>
