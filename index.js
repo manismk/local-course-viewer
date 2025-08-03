@@ -9,6 +9,7 @@ const appState = {
   currentPlaybackRate: 1,
   currentVideoIndex: -1,
   videoFiles: [],
+  autoplayEnabled: false,
 };
 
 // DOM Elements
@@ -21,6 +22,7 @@ const emptyPlayerState = document.getElementById("empty-player-state");
 const sortSelect = document.getElementById("sort-select");
 const prevVideoBtn = document.getElementById("prev-video-btn");
 const nextVideoBtn = document.getElementById("next-video-btn");
+const autoplayToggle = document.getElementById("autoplay-toggle");
 
 // Initialize VideoJS player
 function initPlayer() {
@@ -74,6 +76,15 @@ function initPlayer() {
         "currentPlaybackRate",
         appState.currentPlaybackRate
       );
+    }
+  });
+
+  // Handle video ended for autoplay
+  appState.player.on("ended", () => {
+    if (appState.autoplayEnabled && appState.currentVideoIndex < appState.videoFiles.length - 1) {
+      setTimeout(() => {
+        loadNextVideo();
+      }, 1000); // Small delay before autoplaying next video
     }
   });
 }
@@ -141,6 +152,24 @@ async function navigateToPath(path) {
 
   updateBreadcrumb();
   await displayFolderContents(appState.currentDirectory);
+}
+
+// Update current video highlighting in sidebar
+function updateCurrentVideoHighlight() {
+  // Remove current-video class from all file items
+  const allFileItems = document.querySelectorAll('.file-item');
+  allFileItems.forEach(item => item.classList.remove('current-video'));
+
+  // Add current-video class to the currently playing video
+  if (appState.currentVideoPath) {
+    const currentFileName = appState.currentVideoPath.split('/').pop();
+    allFileItems.forEach(item => {
+      const fileName = item.querySelector('.file-name').textContent;
+      if (fileName === currentFileName) {
+        item.classList.add('current-video');
+      }
+    });
+  }
 }
 
 // Display folder contents
@@ -276,6 +305,9 @@ async function displayFolderContents(directoryHandle) {
   // Disable navigation buttons when changing folders
   prevVideoBtn.disabled = true;
   nextVideoBtn.disabled = true;
+
+  // Update current video highlighting
+  updateCurrentVideoHighlight();
 }
 
 // Function for natural sorting (1, 2, 10 instead of 1, 10, 2)
@@ -379,6 +411,9 @@ async function loadVideo(fileHandle, fileName) {
 
     // Update navigation buttons
     updateNavigationButtons();
+
+    // Update current video highlighting in sidebar
+    updateCurrentVideoHighlight();
   } catch (error) {
     console.error("Error loading video:", error);
     alert("Error loading video: " + error.message);
@@ -463,6 +498,13 @@ sortSelect.addEventListener("change", () => {
 prevVideoBtn.addEventListener("click", loadPreviousVideo);
 nextVideoBtn.addEventListener("click", loadNextVideo);
 
+// Autoplay toggle listener
+autoplayToggle.addEventListener("change", (e) => {
+  appState.autoplayEnabled = e.target.checked;
+  // Save autoplay preference to localStorage
+  window.localStorage.setItem("autoplayEnabled", appState.autoplayEnabled);
+});
+
 // Keyboard shortcuts for navigation
 document.addEventListener("keydown", (e) => {
   // Only handle when player is active and we're not in an input field
@@ -499,5 +541,12 @@ document.addEventListener("DOMContentLoaded", () => {
       "Your browser does not support the File System Access API. Please use Chrome, Edge, or another compatible browser."
     );
     selectFolderBtn.disabled = true;
+  }
+
+  // Restore autoplay setting from localStorage
+  const savedAutoplay = window.localStorage.getItem("autoplayEnabled");
+  if (savedAutoplay !== null) {
+    appState.autoplayEnabled = savedAutoplay === "true";
+    autoplayToggle.checked = appState.autoplayEnabled;
   }
 });
